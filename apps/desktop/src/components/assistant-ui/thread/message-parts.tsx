@@ -18,7 +18,12 @@ import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
 
 const ImageGenerateTool: FC<ToolCallMessagePartProps> = ({ args, result }) => {
-  const aspectRatio = typeof args?.aspect_ratio === 'string' ? args.aspect_ratio : undefined
+  const aspectRatio =
+    typeof args?.aspect_ratio === 'string'
+      ? args.aspect_ratio
+      : args?.input && typeof args.input === 'object' && 'aspect_ratio' in args.input && typeof args.input.aspect_ratio === 'string'
+        ? args.input.aspect_ratio
+        : undefined
 
   return (
     <div className="mt-1.5">
@@ -27,13 +32,15 @@ const ImageGenerateTool: FC<ToolCallMessagePartProps> = ({ args, result }) => {
   )
 }
 
+const GENERATED_IMAGE_TOOL_NAMES = new Set(['image_generate', 'mcp_krea_ai_generate_image'])
+
 const ChainToolFallback: FC<ToolCallMessagePartProps> = props => {
   // todo parts are hoisted to a dedicated panel above the message content.
   if (props.toolName === 'todo') {
     return null
   }
 
-  if (props.toolName === 'image_generate') {
+  if (GENERATED_IMAGE_TOOL_NAMES.has(props.toolName)) {
     return <ImageGenerateTool {...props} />
   }
 

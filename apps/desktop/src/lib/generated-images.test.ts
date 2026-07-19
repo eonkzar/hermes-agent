@@ -22,6 +22,29 @@ describe('generatedImageFromResult', () => {
   it('ignores failed image generation results', () => {
     expect(generatedImageFromResult({ image: 'https://cdn.example/cat.png', success: false })).toBeNull()
   })
+
+  it('extracts Krea MCP image URLs from completed job results', () => {
+    expect(
+      generatedImageFromResult({
+        completed: true,
+        job: {
+          result: { urls: ['https://gen.krea.ai/images/cat.png'] },
+          status: 'completed'
+        },
+        mode: 'sync'
+      })
+    ).toBe('https://gen.krea.ai/images/cat.png')
+  })
+
+  it('extracts Krea MCP image URLs from JSON-string tool results', () => {
+    expect(
+      generatedImageFromResult(
+        JSON.stringify({
+          job: { result: { urls: ['https://gen.krea.ai/images/ping-pong.png'] } }
+        })
+      )
+    ).toBe('https://gen.krea.ai/images/ping-pong.png')
+  })
 })
 
 describe('stripGeneratedImageEchoes', () => {
@@ -56,6 +79,18 @@ describe('generatedImageEchoSources', () => {
         }
       ])
     ).toEqual(['/host/cat.png', '/sandbox/cat.png'])
+  })
+
+  it('collects Krea MCP generated image URLs', () => {
+    expect(
+      generatedImageEchoSources([
+        {
+          result: { job: { result: { urls: ['https://gen.krea.ai/images/cat.png'] } } },
+          toolName: 'mcp_krea_ai_generate_image',
+          type: 'tool-call'
+        }
+      ])
+    ).toEqual(['https://gen.krea.ai/images/cat.png'])
   })
 })
 

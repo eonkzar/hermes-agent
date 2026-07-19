@@ -14,6 +14,7 @@ type TextLike = {
 // sandbox path the model restated doesn't slip through as a duplicate image.
 const DISPLAY_KEYS = ['host_image', 'image'] as const
 const ECHO_KEYS = ['host_image', 'image', 'agent_visible_image'] as const
+const GENERATED_IMAGE_TOOL_NAMES = new Set(['image_generate', 'mcp_krea_ai_generate_image'])
 
 function recordFromUnknown(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -37,6 +38,18 @@ function stringFields(record: Record<string, unknown>, keys: readonly string[]):
   return keys.map(key => record[key]).filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
 }
 
+function firstStringInArray(value: unknown): string | null {
+  return Array.isArray(value) ? value.find((item): item is string => typeof item === 'string' && item.trim().length > 0) ?? null : null
+}
+
+function kreaImageUrlFromRecord(record: Record<string, unknown>): string | null {
+  const resultRecord = recordFromUnknown(record.result)
+  const jobRecord = recordFromUnknown(record.job)
+  const jobResultRecord = jobRecord ? recordFromUnknown(jobRecord.result) : null
+
+  return firstStringInArray(jobResultRecord?.urls) ?? firstStringInArray(resultRecord?.urls)
+}
+
 function regexEscape(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -46,7 +59,7 @@ function unique(values: string[]): string[] {
 }
 
 function imageResult(part: ToolLike): Record<string, unknown> | null {
-  if (part.type !== 'tool-call' || part.toolName !== 'image_generate') {
+  if (part.type !== 'tool-call' || typeof part.toolName !== 'string' || !GENERATED_IMAGE_TOOL_NAMES.has(part.toolName)) {
     return null
   }
 
@@ -55,7 +68,7 @@ function imageResult(part: ToolLike): Record<string, unknown> | null {
   return record && record.success !== false ? record : null
 }
 
-/** Display source for a completed `image_generate` result (host path wins). */
+/** Display source for a completed generated-image result (host path wins). */
 export function generatedImageFromResult(result: unknown): string | null {
   const record = recordFromUnknown(result)
 
@@ -63,12 +76,18 @@ export function generatedImageFromResult(result: unknown): string | null {
     return null
   }
 
-  return stringFields(record, DISPLAY_KEYS)[0] ?? null
+  return stringFields(record, DISPLAY_KEYS)[0] ?? kreaImageUrlFromRecord(record) ?? null
 }
 
 /** Every path/URL a generated image might appear as in prose, for de-duping. */
 export function generatedImageEchoSources(parts: readonly ToolLike[]): string[] {
-  return unique(parts.flatMap(part => stringFields(imageResult(part) ?? {}, ECHO_KEYS)))
+  return unique(
+    parts.flatMap(part => {
+      const result = imageResult(part) ?? {}
+
+      return [...stringFields(result, ECHO_KEYS), kreaImageUrlFromRecord(result)].filter((v): v is string => Boolean(v))
+    })
+  )
 }
 
 /** Strip a generated image out of prose so it only ever shows in the tool slot.

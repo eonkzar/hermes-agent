@@ -243,6 +243,36 @@ function assistantImageMessage(running = false): ThreadMessage {
   } as ThreadMessage
 }
 
+function assistantKreaImageMessage(): ThreadMessage {
+  return {
+    id: 'assistant-krea-image-done',
+    role: 'assistant',
+    content: [
+      {
+        type: 'tool-call',
+        toolCallId: 'krea-image-1',
+        toolName: 'mcp_krea_ai_generate_image',
+        args: { input: { aspect_ratio: '1:1', prompt: 'a cat' }, model: 'krea/krea-2/large' },
+        argsText: JSON.stringify({ input: { aspect_ratio: '1:1', prompt: 'a cat' }, model: 'krea/krea-2/large' }),
+        result: {
+          completed: true,
+          job: { result: { urls: ['https://gen.krea.ai/images/cat.png'] }, status: 'completed' },
+          mode: 'sync'
+        }
+      }
+    ],
+    status: { type: 'complete', reason: 'stop' },
+    createdAt,
+    metadata: {
+      unstable_state: null,
+      unstable_annotations: [],
+      unstable_data: [],
+      steps: [],
+      custom: {}
+    }
+  } as ThreadMessage
+}
+
 interface StreamingControls {
   emitSecond: () => void
   complete: () => void
@@ -574,5 +604,17 @@ describe('assistant-ui streaming renderer', () => {
     })
     expect(container.querySelector('[data-slot="aui_generated-image"]')).toBeTruthy()
     expect(screen.queryByRole('status', { name: /rendering image/i })).toBeNull()
+  })
+
+  it('renders completed Krea MCP image generation results in the tool slot', async () => {
+    const { container } = render(<MessageHarness message={assistantKreaImageMessage()} />)
+    const ui = within(container)
+
+    await waitFor(() => {
+      expect(ui.getByRole('img', { name: 'Generated image' }).getAttribute('src')).toBe(
+        'https://gen.krea.ai/images/cat.png'
+      )
+    })
+    expect(container.querySelector('[data-slot="aui_generated-image"]')).toBeTruthy()
   })
 })
