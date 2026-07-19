@@ -16,6 +16,13 @@ const PROCESS_NOTIFICATION_RE = /^\[IMPORTANT: Background process [\s\S]*\]$/
 
 const PREVIEW_MAX = 120
 
+export function escapeTimelineSelectorValue(
+  value: string,
+  nativeEscape: ((value: string) => string) | undefined = globalThis.CSS?.escape
+): string {
+  return nativeEscape ? nativeEscape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
+}
+
 export function timelinePreview(text: string, max: number = PREVIEW_MAX): string {
   const collapsed = text.replace(/\s+/g, ' ').trim()
 

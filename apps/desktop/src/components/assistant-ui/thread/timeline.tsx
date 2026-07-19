@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   activeTimelineIndex,
   deriveTimelineEntries,
+  escapeTimelineSelectorValue,
   type TimelineEntry,
   type TimelineSourceMessage
 } from './timeline-data'
@@ -103,7 +104,7 @@ function jumpScroll(viewport: HTMLElement, top: number, duration = 170): void {
 
 function scrollToPrompt(id: string) {
   const viewport = document.querySelector<HTMLElement>(VIEWPORT)
-  const node = viewport?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`)
+  const node = viewport?.querySelector<HTMLElement>(`[data-message-id="${escapeTimelineSelectorValue(id)}"]`)
 
   if (!viewport || !node) {
     return
@@ -190,7 +191,7 @@ export const ThreadTimeline: FC = () => {
       const top = viewport.getBoundingClientRect().top
 
       const offsets = entries.map(entry => {
-        const node = viewport.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(entry.id)}"]`)
+        const node = viewport.querySelector<HTMLElement>(`[data-message-id="${escapeTimelineSelectorValue(entry.id)}"]`)
 
         return node ? node.getBoundingClientRect().top - top : null
       })

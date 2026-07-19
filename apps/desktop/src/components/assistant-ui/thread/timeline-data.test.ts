@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { activeTimelineIndex, deriveTimelineEntries, timelinePreview } from './timeline-data'
+import { activeTimelineIndex, deriveTimelineEntries, escapeTimelineSelectorValue, timelinePreview } from './timeline-data'
+
+describe('escapeTimelineSelectorValue', () => {
+  it('uses the platform CSS escape implementation when available', () => {
+    expect(escapeTimelineSelectorValue('message 1', value => `native:${value}`)).toBe('native:message 1')
+  })
+
+  it('escapes selector punctuation when CSS.escape is unavailable', () => {
+    expect(escapeTimelineSelectorValue('message "1"', undefined)).toBe('message\\ \\"1\\"')
+  })
+})
 
 describe('timelinePreview', () => {
   it('collapses whitespace to a single line', () => {
