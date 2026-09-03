@@ -255,6 +255,7 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
   const [probeStatus, setProbeStatus] = useState<ProbeStatus>('idle')
   const [probe, setProbe] = useState<DesktopConnectionProbeResult | null>(null)
   const probeSeq = useRef(0)
+  const probeKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -293,6 +294,8 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
   // OAuth login button or the session-token entry box. The effective auth mode
   // prefers a fresh probe result over the saved value.
   const trimmedUrl = coerceRemoteUrlScheme(state.remoteUrl)
+  const probeKey = state.mode === 'remote' && /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : null
+  probeKeyRef.current = probeKey
 
   // The dashboardUrl of the currently-connected cloud instance (the saved
   // cloud connection's remoteUrl), normalized for comparison against each
@@ -309,7 +312,10 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
     Boolean(connectedCloudUrl && agent.dashboardUrl && normalizeCloudUrl(agent.dashboardUrl) === connectedCloudUrl)
 
   useEffect(() => {
-    if (state.mode !== 'remote' || !trimmedUrl || !/^https?:\/\//i.test(trimmedUrl)) {
+    const seq = ++probeSeq.current
+    const requestKey = probeKey
+
+    if (!requestKey) {
       setProbeStatus('idle')
       setProbe(null)
 
@@ -322,14 +328,13 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
       return
     }
 
-    const seq = ++probeSeq.current
     setProbeStatus('probing')
 
     const timer = setTimeout(() => {
       desktop
-        .probeConnectionConfig(trimmedUrl)
+        .probeConnectionConfig(requestKey)
         .then(result => {
-          if (seq !== probeSeq.current) {
+          if (seq !== probeSeq.current || probeKeyRef.current !== requestKey) {
             return
           }
 
@@ -337,7 +342,7 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
           setProbeStatus(result.reachable ? 'done' : 'error')
         })
         .catch(() => {
-          if (seq !== probeSeq.current) {
+          if (seq !== probeSeq.current || probeKeyRef.current !== requestKey) {
             return
           }
 
@@ -347,7 +352,7 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [state.mode, trimmedUrl])
+  }, [probeKey])
 
   // Effective auth mode: a reachable probe wins; otherwise fall back to the
   // saved config's mode so a re-open of settings doesn't flicker.
@@ -1313,7 +1318,7 @@ export function GatewaySettings({ embedded = false }: { embedded?: boolean } = {
           {state.mode === 'remote' && probeStatus === 'error' ? (
             <div className="flex items-start gap-2 py-3 text-[length:var(--conversation-caption-font-size)] text-(--ui-text-tertiary)">
               <AlertCircle className="mt-0.5 size-4 shrink-0" />
-              {g.probeError}
+              <span>{probe?.error?.trim() || g.probeError}</span>
             </div>
           ) : null}
 

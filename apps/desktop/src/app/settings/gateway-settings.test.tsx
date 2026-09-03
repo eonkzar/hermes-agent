@@ -1,7 +1,8 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getConnectionConfig = vi.fn()
+const probeConnectionConfig = vi.fn()
 const saveConnectionConfig = vi.fn()
 
 // This test owns the machine-level GatewaySettings contract. The managed SSH
@@ -22,11 +23,14 @@ const localConnection = {
 }
 
 beforeEach(() => {
+  getConnectionConfig.mockReset()
   getConnectionConfig.mockResolvedValue(localConnection)
+  probeConnectionConfig.mockReset()
+  saveConnectionConfig.mockReset()
   saveConnectionConfig.mockResolvedValue(localConnection)
   Object.defineProperty(window, 'hermesDesktop', {
     configurable: true,
-    value: { getConnectionConfig, saveConnectionConfig }
+    value: { getConnectionConfig, probeConnectionConfig, saveConnectionConfig }
   })
 })
 
@@ -54,5 +58,64 @@ describe('GatewaySettings', () => {
     expect(screen.queryByText('Applies to')).toBeNull()
     expect(screen.queryByText('All profiles')).toBeNull()
     expect(screen.queryByText('Use default gateway')).toBeNull()
+  })
+
+  it('shows the concrete remote probe failure instead of generic unreachable copy', async () => {
+    getConnectionConfig.mockResolvedValue({
+      ...localConnection,
+      mode: 'remote',
+      remoteUrl: 'http://10.0.0.94:9119'
+    })
+    probeConnectionConfig.mockResolvedValue({
+      authMode: 'unknown',
+      baseUrl: 'http://10.0.0.94:9119',
+      error: 'connect ENETUNREACH 10.0.0.94:9119',
+      providers: [],
+      reachable: false,
+      version: null
+    })
+
+    const { GatewaySettings } = await import('./gateway-settings')
+
+    render(<GatewaySettings />)
+
+    expect(await screen.findByText('connect ENETUNREACH 10.0.0.94:9119')).toBeTruthy()
+    expect(screen.queryByText(/Could not reach this gateway yet/)).toBeNull()
+  })
+
+  it('ignores an in-flight probe result after the remote URL is cleared', async () => {
+    getConnectionConfig.mockResolvedValue({
+      ...localConnection,
+      mode: 'remote',
+      remoteUrl: 'http://10.0.0.94:9119'
+    })
+
+    let resolveProbe: (result: unknown) => void = () => {}
+    probeConnectionConfig.mockReturnValue(
+      new Promise(resolve => {
+        resolveProbe = resolve
+      })
+    )
+
+    const { GatewaySettings } = await import('./gateway-settings')
+
+    render(<GatewaySettings />)
+    await waitFor(() => expect(probeConnectionConfig).toHaveBeenCalledWith('http://10.0.0.94:9119'))
+
+    fireEvent.change(screen.getByDisplayValue('http://10.0.0.94:9119'), { target: { value: '' } })
+
+    await act(async () => {
+      resolveProbe({
+        authMode: 'unknown',
+        baseUrl: 'http://10.0.0.94:9119',
+        error: 'connect ENETUNREACH 10.0.0.94:9119',
+        providers: [],
+        reachable: false,
+        version: null
+      })
+    })
+
+    expect(screen.queryByText('connect ENETUNREACH 10.0.0.94:9119')).toBeNull()
+    expect(screen.queryByText(/Could not reach this gateway yet/)).toBeNull()
   })
 })
